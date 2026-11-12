@@ -47,6 +47,8 @@ h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;margin:4px 0 2p
 .seg button{border:0;background:none;border-radius:9px;padding:9px 6px;font-weight:700;font-size:13.5px;color:#6b5a3a;white-space:nowrap}
 .seg button.on{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(120,90,30,.2)}
 .ctl .top{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}
+.pt td,.pt th{white-space:nowrap}.pt td.sub{padding-left:22px;color:#6b5a3a;font-size:13px}.pt tr.grp td{background:#FBF6EA;font-weight:700}.pt th.hl,.pt td.hl{background:#F6EEDB;font-weight:700}
+.okbox{background:var(--ok-l);color:var(--ok);border-radius:11px;padding:9px 12px;font-size:13px;margin-bottom:10px}
 .dnav{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center}
 .dnav .btn{padding:11px 0}
 input[type=month].inp,input[type=date].inp{-webkit-appearance:none;appearance:none;min-height:46px;display:block;text-align:left}
@@ -160,6 +162,7 @@ if(!DEMO){
     async sales(from,to){let out=[],i=0;for(;;){const d=chk(await sb.from('daily_sales').select('sale_date,location_id,amount').gte('sale_date',from).lte('sale_date',to).order('sale_date').range(i,i+999));out=out.concat(d);if(d.length<1000)break;i+=1000}return out},
     async upsert(rows){for(let i=0;i<rows.length;i+=500)chk(await sb.from('daily_sales').upsert(rows.slice(i,i+500),{onConflict:'sale_date,location_id'}))},
     async remove(date,locIds){if(locIds.length)chk(await sb.from('daily_sales').delete().eq('sale_date',date).in('location_id',locIds))},
+    async payments(from,to){let out=[],i=0;for(;;){const d=chk(await sb.from('payment_sales').select('sale_date,branch_id,brand_id,mode,amount').gte('sale_date',from).lte('sale_date',to).order('id').range(i,i+999));out=out.concat(d);if(d.length<1000)break;i+=1000}return out},
     async addLocation(name,sort,kind){chk(await sb.from('locations').insert({name,sort,kind:kind||'branch'}))},
     async updateLocation(id,patch){chk(await sb.from('locations').update(patch).eq('id',id))},
     async profiles(){return chk(await sb.from('profiles').select('*').order('created_at'))},
@@ -194,6 +197,7 @@ if(!DEMO){
     async upsert(rows){rows.forEach(r=>{if(!canW(r.location_id))throw new Error('No permission');const e=D.sales.find(s=>s.sale_date===r.sale_date&&s.location_id===r.location_id);
       if(e){if(e.amount!==r.amount){log('changed',{sale_date:r.sale_date,location:lname(r.location_id),old_amount:e.amount,new_amount:r.amount});e.amount=r.amount}}else{D.sales.push({...r});log('added',{sale_date:r.sale_date,location:lname(r.location_id),new_amount:r.amount})}});save()},
     async remove(date,ids){D.sales=D.sales.filter(s=>{const del=s.sale_date===date&&ids.includes(s.location_id)&&canW(s.location_id);if(del)log('deleted',{sale_date:date,location:lname(s.location_id),old_amount:s.amount});return !del});save()},
+    async payments(){return []},
     async addLocation(name,sort,kind){kind=kind||'branch';if(D.locs.some(l=>l.name===name&&kindOf(l)===kind))throw new Error('That name already exists');D.locs.push({id:'L'+Date.now(),name,sort,kind,active:true});save()},
     async updateLocation(id,patch){Object.assign(D.locs.find(l=>l.id===id),patch);save()},
     async profiles(){return meP().role==='admin'?D.profiles:[meP()]},
@@ -213,7 +217,7 @@ const activeLocs=()=>A.locs.filter(l=>l.active&&kindOf(l)===A.kind);
 const kindLocs=()=>A.locs.filter(l=>kindOf(l)===A.kind);
 const KW=()=>A.kind==='brand'?{one:'Brand',many:'Brands',low:'brand',title:'BRAND BASED'}:{one:'Branch',many:'Branches',low:'branch',title:'LOCATION BASED'};
 function setKind(k){A.kind=k;try{localStorage.setItem('crave_kind',k)}catch(e){}view()}
-const segHtml=()=>`<div class="seg"><button class="${A.kind==='branch'?'on':''}" onclick="setKind('branch')">Branch wise</button><button class="${A.kind==='brand'?'on':''}" onclick="setKind('brand')">Brand wise</button></div>`;
+const segHtml=()=>`<div class="seg"><button class="${A.kind==='branch'?'on':''}" onclick="A.payFilter='';setKind('branch')">Branch wise</button><button class="${A.kind==='brand'?'on':''}" onclick="A.payFilter='';setKind('brand')">Brand wise</button></div>`;
 
 async function boot(){
   DB.onRecovery(()=>showReset());
@@ -244,7 +248,7 @@ async function logout(){await DB.signOut();A.me=null;showLogin()}
 
 /* =================== main shell =================== */
 function render(){
-  const tabs=[['sheet','📍 Daily sheet'],['day','📅 Day report'],['month','🗓 Month report']];
+  const tabs=[['sheet','📍 Daily sheet'],['day','📅 Day report'],['month','🗓 Month report'],['pay','💳 Payment modes']];
   if(isAdmin())tabs.push(['team','👥 Team'],['locs','🏪 Locations & brands'],['log','🕘 Activity']);
   const roleName={admin:'Admin',editor:'Finance editor',viewer:'Viewer'}[role()];
   $('#app').innerHTML=`${DEMO?'<div class="demo">DEMO MODE – data is saved in this browser only.</div>':''}
@@ -255,7 +259,7 @@ function render(){
 function go(t){A.tab=t;render()}
 async function view(){
   const v=$('#view');
-  try{v.innerHTML=await ({sheet:vSheet,day:vDay,month:vMonth,team:vTeam,locs:vLocs,log:vLog})[A.tab]()}catch(e){v.innerHTML=`<div class="panel"><b>Could not load.</b><div class="err">${esc(e.message)}</div><button class="btn ghost" onclick="refresh()">Try again</button></div>`}
+  try{v.innerHTML=await ({sheet:vSheet,day:vDay,month:vMonth,pay:vPay,team:vTeam,locs:vLocs,log:vLog})[A.tab]()}catch(e){v.innerHTML=`<div class="panel"><b>Could not load.</b><div class="err">${esc(e.message)}</div><button class="btn ghost" onclick="refresh()">Try again</button></div>`}
 }
 
 /* =================== daily sheet =================== */
@@ -373,6 +377,68 @@ function exportMonth(kind){const {rows,T,PT,filled,days}=A._month,m=A.month,titl
   const body=[...rows.map(r=>[r.n,r2(r.t),T?(r.t/T*100).toFixed(1)+'%':'-',r2(filled?r.t/filled:0),r2(filled?r.t/filled*days:0),r2(r.p),r.p?((r.t-r.p)/r.p*100).toFixed(1)+'%':'-']),['Total',r2(T),'100%',r2(filled?T/filled:0),r2(filled?T/filled*days:0),r2(PT),PT?((T-PT)/PT*100).toFixed(1)+'%':'-']];
   if(kind==='xlsx')return xlsxOut('Crave_'+KW().one+'_Month_Report_'+m,[['Month report',[[title],[],head,...body]]]);pdfOut('Crave_'+KW().one+'_Month_Report_'+m,'landscape','a4',title,[[null,head,body]])}
 
+/* =================== payment modes =================== */
+const PM_COUNTER=['CASH','CARD','QLUB','BANK TRANSFER','FAWRAN','SADAD'];
+const PM_APPS=['TALABAT','RAFEEQ','SNOONU','KEETA','BEANZ','DELIVEROO','BAREZ','CARTS'];
+const PM_COLS=[...PM_COUNTER,'COUNTER SALES',...PM_APPS,'DELIVERY APP','CATERING','OTHER','TOTAL'];
+const PM_HL=new Set(['COUNTER SALES','DELIVERY APP','TOTAL']);
+A.payDay='';A.payView='channel';A.payFilter='';
+function pmRow(m){const r={};PM_COUNTER.concat(PM_APPS,['CATERING','OTHER']).forEach(k=>r[k]=m[k]||0);
+  r['COUNTER SALES']=PM_COUNTER.reduce((a,k)=>a+r[k],0);r['DELIVERY APP']=PM_APPS.reduce((a,k)=>a+r[k],0);
+  r.TOTAL=r['COUNTER SALES']+r['DELIVERY APP']+r.CATERING+r.OTHER;return PM_COLS.map(k=>r[k])}
+async function payData(){
+  const m=A.month,days=daysIn(m),from=A.payDay?m+'-'+A.payDay:m+'-01',to=A.payDay?from:m+'-'+String(days).padStart(2,'0');
+  const P=await DB.payments(from,to),byId={};A.locs.forEach(l=>byId[l.id]=l);
+  const add=(o,k,mode,a)=>{(o[k]=o[k]||{})[mode]=((o[k]||{})[mode]||0)+Number(a)};
+  const rows=[];
+  if(A.kind==='brand'){const g={};P.forEach(p=>{if(p.brand_id)add(g,p.brand_id,p.mode,p.amount)});
+    activeLocs().forEach(b=>rows.push({id:b.id,name:b.name,vals:pmRow(g[b.id]||{}),lvl:0}));}
+  else{const g={},sub={};P.forEach(p=>{add(g,p.branch_id,p.mode,p.amount);if(p.brand_id)add(sub,p.branch_id+'|'+p.brand_id,p.mode,p.amount)});
+    activeLocs().forEach(l=>{const subs=Object.keys(sub).filter(k=>k.startsWith(l.id+'|')).map(k=>({b:byId[k.split('|')[1]],v:sub[k]})).filter(x=>x.b).sort((a,b)=>a.b.sort-b.b.sort);
+      rows.push({id:l.id,name:l.name,vals:pmRow(g[l.id]||{}),lvl:0,grp:subs.length>1});
+      if(subs.length>1)subs.forEach(s=>rows.push({name:s.b.name,vals:pmRow(s.v),lvl:1}))});}
+  const top=rows.filter(r=>!r.lvl),tot=PM_COLS.map((_,i)=>top.reduce((a,r)=>a+r.vals[i],0)),T=tot[tot.length-1];
+  const ds=index(await salesFor(from,to)),ids=new Set(activeLocs().map(l=>l.id));let daily=0;Object.values(ds).forEach(d=>Object.entries(d).forEach(([k,v])=>{if(ids.has(k))daily+=v}));
+  return {rows,tot,T,daily,from,to}}
+async function vPay(){
+  const m=A.month,days=daysIn(m),D=await payData();A._pay=D;
+  const per=A.payDay?fdate(D.from):monthName(m);
+  const diff=r2(D.daily-D.T);
+  return `<h1>Payment modes & channels</h1><p class="sub">Sales by mode of payment – counter, delivery apps and catering.</p>
+   <div class="panel ctl"><div class="top"><div class="fld"><label>Month</label><input class="inp" type="month" value="${m}" onchange="A.month=this.value;A.payDay='';view()"></div>${segHtml()}</div>
+    <div class="fld"><label>Period</label><select class="inp" onchange="A.payDay=this.value;view()"><option value="">Whole month</option>${Array.from({length:days},(_,i)=>String(i+1).padStart(2,'0')).map(d=>`<option value="${d}" ${A.payDay===d?'selected':''}>${d} ${monthName(m).split(' ')[0]}</option>`).join('')}</select></div>
+    <div class="seg"><button class="${A.payView==='channel'?'on':''}" onclick="A.payView='channel';view()">Channel analysis</button><button class="${A.payView==='detail'?'on':''}" onclick="A.payView='detail';view()">Detailed summary</button></div>
+    ${A.payView==='channel'?`<div class="fld"><label>${KW().one}</label><select class="inp" onchange="A.payFilter=this.value;view()"><option value="">All ${KW().many.toLowerCase()}</option>${D.rows.filter(r=>!r.lvl).map(r=>`<option value="${r.id}" ${A.payFilter===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>`:''}
+    <div class="acts"><button class="btn green" onclick="exportPay('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportPay('pdf')">⬇ PDF</button></div></div>
+   <div class="kpis"><div class="kpi"><div class="l">Total · ${per}</div><div class="v" style="color:var(--ok)">${qarK(D.T)}</div></div>
+    <div class="kpi"><div class="l">Counter sales</div><div class="v">${qarK(D.tot[6])}</div><div class="h">${D.T?(D.tot[6]/D.T*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="l">Delivery apps</div><div class="v">${qarK(D.tot[15])}</div><div class="h">${D.T?(D.tot[15]/D.T*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="l">Catering + other</div><div class="v">${qarK(D.tot[16]+D.tot[17])}</div></div></div>
+   ${D.T||D.daily?(Math.abs(diff)<0.01?`<div class="okbox">✓ Matches the daily sales sheet (${qar(D.daily)})</div>`:`<div class="warnbox" style="margin:0 0 10px">⚠ Daily sales sheet shows ${qar(D.daily)} – difference ${qar(diff)}. Some payment details may be missing.</div>`):''}
+   ${A.payView==='channel'?chanHtml(D):`<div class="lstitle">${esc(payTitle())}</div><div class="lswrap"><table class="ls pt"><tr><th class="stk">${KW().one.toUpperCase()}</th>${PM_COLS.map(c=>`<th class="${PM_HL.has(c)?'tt':''}">${c}</th>`).join('')}</tr>
+    ${D.rows.map(r=>`<tr class="${r.grp?'grp':''}"><td class="stk" style="text-align:left;${r.lvl?'padding-left:20px;font-weight:500;color:#6b5a3a':''}">${r.lvl?'↳ ':''}${esc(r.name)}</td>${r.vals.map((v,i)=>`<td class="${PM_HL.has(PM_COLS[i])?'tt':''}">${n2(v)}</td>`).join('')}</tr>`).join('')}
+    <tr class="ft"><td class="stk">TOTAL</td>${D.tot.map(v=>`<td>${n2(v)}</td>`).join('')}</tr>
+    <tr class="ft2"><td class="stk">PERCENTAGE</td>${D.tot.map(v=>`<td>${D.T?(v/D.T*100).toFixed(1):0}%</td>`).join('')}</tr></table></div>`}`}
+function chanData(D){const sel=A.payFilter&&D.rows.find(r=>r.id===A.payFilter&&!r.lvl);const v=sel?sel.vals:D.tot;const T=v[v.length-1];
+  const groups=[['Counter sales',PM_COUNTER,6],['Delivery apps',PM_APPS,15],['Catering',['CATERING'],16],['Other',['OTHER'],17]];
+  return {name:sel?sel.name:'All '+KW().many.toLowerCase(),T,groups:groups.map(([g,ks,gi])=>({g,amt:v[gi],items:ks.map(k=>({k,amt:v[PM_COLS.indexOf(k)]}))}))}}
+function chanHtml(D){const C=chanData(D),pc=a=>C.T?(a/C.T*100).toFixed(1)+'%':'-',max=Math.max(1,...C.groups.flatMap(g=>g.items.map(i=>i.amt)));
+  return `<div class="panel"><h3>Channel sales analysis · ${esc(C.name)}</h3><p class="hint" style="margin-top:-4px">${A.payDay?fdate(D.from):monthName(A.month)}</p>
+   <div class="tscroll"><table class="t"><tr><th>Channel</th><th class="n">Amount (QAR)</th><th class="n">Share</th><th style="width:30%"></th></tr>
+   ${C.groups.map(g=>`<tr class="tot"><td>${g.g}</td><td class="n">${n2(g.amt)}</td><td class="n">${pc(g.amt)}</td><td></td></tr>
+     ${g.items.length>1?g.items.map(i=>`<tr><td style="padding-left:20px">${i.k.charAt(0)+i.k.slice(1).toLowerCase()}</td><td class="n">${n2(i.amt)}</td><td class="n">${pc(i.amt)}</td><td><div style="height:8px;border-radius:4px;background:var(--gold);width:${(i.amt/max*100).toFixed(1)}%"></div></td></tr>`).join(''):''}`).join('')}
+   <tr class="tot"><td>TOTAL</td><td class="n">${n2(C.T)}</td><td class="n">100%</td><td></td></tr></table></div></div>`}
+function exportChan(kind){const D=A._pay,C=chanData(D),pc=a=>C.T?(a/C.T*100).toFixed(1)+'%':'-',title='CHANNEL SALES ANALYSIS – '+C.name.toUpperCase()+' – '+(A.payDay?fdate(D.from):monthName(A.month)).toUpperCase(),head=['Channel','Amount (QAR)','Share'];
+  const body=[];C.groups.forEach(g=>{body.push([g.g.toUpperCase(),r2(g.amt),pc(g.amt)]);if(g.items.length>1)g.items.forEach(i=>body.push(['   '+i.k,r2(i.amt),pc(i.amt)]))});body.push(['Total',r2(C.T),'100%']);
+  const file='Crave_Channel_Sales_'+(A.payDay?D.from:A.month);
+  if(kind==='xlsx')return xlsxOut(file,[['Channel sales',[[title],[],head,...body]]]);pdfOut(file,'portrait','a4',title,[[null,head,body]])}
+function payTitle(){return `CRAVE SALES ${A.payDay?fdate(A._pay.from).toUpperCase():monthName(A.month).toUpperCase()} DETAILED SUMMARY – ${KW().many.toUpperCase()}`}
+function exportPay(kind){if(A.payView==='channel')return exportChan(kind);const D=A._pay,title=payTitle(),head=[KW().one.toUpperCase(),...PM_COLS];
+  const body=[...D.rows.map(r=>[(r.lvl?'   ':'')+r.name,...r.vals.map(r2)]),['TOTAL',...D.tot.map(r2)],['PERCENTAGE',...D.tot.map(v=>(D.T?(v/D.T*100).toFixed(1):0)+'%')]];
+  const file='Crave_Payment_Modes_'+KW().one+'_'+(A.payDay?D.from:A.month);
+  if(kind==='xlsx')return xlsxOut(file,[['Payment modes',[[title],head,...body],{merge:head.length}]]);
+  pdfOut(file,'landscape','a3',title,[[null,head,body]])}
+
 /* =================== exports =================== */
 async function xlsxOut(file,sheets){
   try{await loadScript(XLSX_SRC,()=>window.XLSX)}catch(e){return toast('Could not load Excel tool – check internet')}
@@ -428,7 +494,7 @@ async function vLog(){const R=await DB.audit();
    <div class="panel"><div class="tscroll"><table class="t"><tr><th>When</th><th>Who</th><th>What</th><th>Date</th><th>Location</th><th class="n">Old</th><th class="n">New</th></tr>
     ${R.map(a=>`<tr><td>${new Date(a.at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}</td><td>${esc(a.email||'')}</td><td>${esc(a.action)}${a.detail?'<div class="hint" style="margin:0">'+esc(a.detail)+'</div>':''}</td><td>${a.sale_date?fdate(a.sale_date):''}</td><td>${esc(a.location||'')}</td><td class="n">${a.old_amount!=null?n2(a.old_amount):''}</td><td class="n">${a.new_amount!=null?n2(a.new_amount):''}</td></tr>`).join('')||'<tr><td colspan="7" class="empty">No activity yet</td></tr>'}</table></div></div>`}
 
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&A.me&&A.me.role!=='pending'){A.cache={};if(['sheet','day','month'].includes(A.tab))view()}});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&A.me&&A.me.role!=='pending'){A.cache={};if(['sheet','day','month','pay'].includes(A.tab))view()}});
 boot();
 </script>
 </body>
