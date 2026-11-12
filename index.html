@@ -247,8 +247,12 @@ function showPending(){lgShell(`<p style="text-align:center"><b>Hi ${esc(A.me.fu
 async function logout(){await DB.signOut();A.me=null;showLogin()}
 
 /* =================== main shell =================== */
+const SECTIONS=[['sheet','📍 Daily sheet'],['day','📅 Day report'],['month','🗓 Month report'],['pay','💳 Payment modes']];
+const canTab=k=>isAdmin()||!A.me.tabs||A.me.tabs.includes(k);
 function render(){
-  const tabs=[['sheet','📍 Daily sheet'],['day','📅 Day report'],['month','🗓 Month report'],['pay','💳 Payment modes']];
+  const tabs=SECTIONS.filter(([k])=>canTab(k));
+  if(!tabs.length&&!isAdmin()){$('#app').innerHTML='';lgShell(`<p style="text-align:center"><b>Hi ${esc(A.me.full_name||A.me.email)}</b></p><p class="hint" style="text-align:center">You don't have access to any section yet. Ask the finance admin.</p><button class="btn ghost" onclick="logout()">Sign out</button>`);return}
+  if(!tabs.concat(isAdmin()?[['team'],['locs'],['log']]:[]).some(([k])=>k===A.tab))A.tab=tabs[0][0];
   if(isAdmin())tabs.push(['team','👥 Team'],['locs','🏪 Locations & brands'],['log','🕘 Activity']);
   const roleName={admin:'Admin',editor:'Finance editor',viewer:'Viewer'}[role()];
   $('#app').innerHTML=`${DEMO?'<div class="demo">DEMO MODE – data is saved in this browser only.</div>':''}
@@ -467,8 +471,10 @@ async function vTeam(){
    <div class="panel"><b>Adding someone:</b> send them this app link – they tap <b>Request access</b>, confirm their email, then appear below as <i>Pending</i>.${DEMO?'':' Or add them yourself in Supabase → Authentication → Users → Add user.'}</div>
    ${P.map(p=>`<div class="panel"><div class="row" style="justify-content:space-between"><div><b>${esc(p.full_name||p.email)}</b><div class="hint" style="margin:0">${esc(p.email)}</div></div>
      ${p.id===A.me.id?'<span class="pill g">You</span>':`<select class="inp" style="width:auto" onchange="setRole('${p.id}',this.value)">${['pending','viewer','editor','admin'].map(r=>`<option value="${r}" ${p.role===r?'selected':''}>${{pending:'Pending (no access)',viewer:'Viewer',editor:'Editor',admin:'Admin'}[r]}</option>`).join('')}</select>`}</div>
-     ${p.id!==A.me.id&&['viewer','editor'].includes(p.role)?`<label><input type="checkbox" ${p.all_locations?'checked':''} onchange="setAll('${p.id}',this.checked)"> All locations</label>
-      ${p.all_locations?'':`<div class="chk">${L.map(l=>`<label><input type="checkbox" ${p.location_ids.includes(l.id)?'checked':''} onchange="setLoc('${p.id}','${l.id}',this.checked)">${esc(l.name)}${kindOf(l)==='brand'?' <small style="color:var(--mut)">(brand)</small>':''}</label>`).join('')}</div>`}`:''}</div>`).join('')}`}
+     ${p.id!==A.me.id&&['viewer','editor'].includes(p.role)?`<label><input type="checkbox" ${p.all_locations?'checked':''} onchange="setAll('${p.id}',this.checked)"> All branches & brands</label>
+      ${p.all_locations?'':[['branch','Branches'],['brand','Brands']].map(([k,t])=>`<div class="hint" style="margin-top:10px;font-weight:700">${t}</div><div class="chk">${L.filter(l=>kindOf(l)===k).map(l=>`<label><input type="checkbox" ${p.location_ids.includes(l.id)?'checked':''} onchange="setLoc('${p.id}','${l.id}',this.checked)">${esc(l.name)}</label>`).join('')}</div>`).join('')}${tabsHtml(p)}`:''}</div>`).join('')}`}
+function tabsHtml(p){const t=p.tabs;return `<label style="margin-top:12px">Sections they can open</label><div class="chk">${SECTIONS.map(([k,n])=>`<label><input type="checkbox" ${!t||t.includes(k)?'checked':''} onchange="setTab('${p.id}','${k}',this.checked)">${n}</label>`).join('')}</div>`}
+function setTab(id,k,on){const p=A._prof.find(x=>x.id===id);const s=new Set(p.tabs||SECTIONS.map(x=>x[0]));on?s.add(k):s.delete(k);const arr=SECTIONS.map(x=>x[0]).filter(x=>s.has(x));upd(id,{tabs:arr.length===SECTIONS.length?null:arr})}
 async function upd(id,patch){try{await DB.updateProfile(id,patch);toast('Saved');view()}catch(e){toast(e.message);view()}}
 function setRole(id,r){upd(id,{role:r})}
 function setAll(id,v){upd(id,{all_locations:v})}
