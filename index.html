@@ -37,11 +37,20 @@ h1{font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;margin:4px 0 2p
 .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}
 .kpi{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px}
 .kpi .l{font-size:10.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--mut);font-weight:700}
-.kpi .v{font-size:22px;font-weight:800;margin-top:4px}
+.kpi .v{font-size:22px;font-weight:800;margin-top:4px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:12px;font-weight:700;color:var(--mut);margin-right:4px}
+.ctl{display:flex;flex-direction:column;gap:10px}
+.ctl .fld label{margin-top:0}
+.acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px}
+.acts .btn,.acts label.btn{width:100%;margin:0;text-align:center;display:flex;align-items:center;justify-content:center}
+.dnav{display:grid;grid-template-columns:48px 1fr 48px;gap:8px;align-items:center}
+.dnav .btn{padding:11px 0}
+input[type=month].inp,input[type=date].inp{-webkit-appearance:none;appearance:none;min-height:46px;display:block;text-align:left}
+@media(max-width:600px){.kpis{grid-template-columns:1fr 1fr}.kpi{padding:11px 12px}.kpi .v{font-size:17px}.kpi .l{font-size:9.5px}h1{font-size:26px}}
 .kpi .h{font-size:12px;color:var(--mut);margin-top:4px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 label{display:block;font-size:12.5px;font-weight:600;margin:10px 0 5px;color:#5c4d33}
-.inp{width:100%;border:1.5px solid #E4D6B8;border-radius:11px;padding:11px 12px;background:#fff;outline:none}
+.inp{width:100%;min-width:0;border:1.5px solid #E4D6B8;border-radius:11px;padding:11px 12px;background:#fff;outline:none}
 .inp:focus{border-color:#C9A961}
 .btn{border:0;border-radius:11px;padding:11px 15px;font-weight:700;font-size:14px;background:linear-gradient(135deg,var(--gold2),var(--gold));color:#1E1712;white-space:nowrap}
 .btn.ghost{background:var(--card);border:1.5px solid #D9BE7E;color:var(--ink)}
@@ -107,6 +116,7 @@ table.ls tr.ft3 td{background:#F6EEDB;font-weight:700}
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const n2=v=>v?Number(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'-';
+const qarK=v=>'<small>QAR</small>'+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const qar=v=>'QAR '+Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const fdate=s=>new Date(s+'T12:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
@@ -247,14 +257,13 @@ async function sheetData(m){
 async function vSheet(){
   const m=A.month,C=await sheetData(m),title=`Location based daily sales – Crave Holding – ${monthName(m).toUpperCase()}`;
   return `<h1>Daily sales sheet</h1><p class="sub">${canEdit()?'Tap a date to enter or change its figures.':'View only.'}</p>
-   <div class="panel"><div class="row" style="align-items:flex-end">
-     <div style="flex:1;min-width:160px"><label style="margin-top:0">Month</label><input class="inp" type="month" value="${m}" onchange="A.month=this.value;view()"></div>
-     ${canEdit()?`<button class="btn" onclick="entry()">＋ Enter daily sales</button><label class="btn ghost" style="margin:0;cursor:pointer">⬆ Import Excel<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importFile(this)"></label>`:''}
-     <button class="btn green" onclick="exportSheet('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportSheet('pdf')">⬇ PDF</button></div></div>
-   <div class="kpis"><div class="kpi"><div class="l">Actual total</div><div class="v" style="color:var(--ok)">${qar(C.T)}</div></div>
+   <div class="panel ctl"><div class="fld"><label>Month</label><input class="inp" type="month" value="${m}" onchange="A.month=this.value;view()"></div>
+     ${canEdit()?`<div class="acts"><button class="btn" onclick="entry()">＋ Enter daily sales</button><label class="btn ghost" style="cursor:pointer">⬆ Import Excel<input type="file" accept=".xlsx,.xls,.csv" class="hidden" onchange="importFile(this)"></label></div>`:''}
+     <div class="acts"><button class="btn green" onclick="exportSheet('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportSheet('pdf')">⬇ PDF</button></div></div>
+   <div class="kpis"><div class="kpi"><div class="l">Actual total</div><div class="v" style="color:var(--ok)">${qarK(C.T)}</div></div>
     <div class="kpi"><div class="l">Days entered</div><div class="v">${C.filled}/${C.days}</div></div>
-    <div class="kpi"><div class="l">Average per day</div><div class="v">${qar(C.filled?C.T/C.filled:0)}</div></div>
-    <div class="kpi"><div class="l">Forecast for month</div><div class="v">${qar(C.filled?C.T/C.filled*C.days:0)}</div></div></div>
+    <div class="kpi"><div class="l">Average per day</div><div class="v">${qarK(C.filled?C.T/C.filled:0)}</div></div>
+    <div class="kpi"><div class="l">Forecast for month</div><div class="v">${qarK(C.filled?C.T/C.filled*C.days:0)}</div></div></div>
    ${C.L.length?`<div class="lstitle">${esc(title)}</div><div class="lswrap"><table class="ls"><tr><th class="stk">DATE</th>${C.L.map(l=>`<th>${esc(l.name.toUpperCase())}</th>`).join('')}<th class="tt">TOTAL</th></tr>
     ${C.grid.map(g=>`<tr class="${canEdit()?'ed':''}" ${canEdit()?`onclick="entry('${g.ds}')"`:''}><td class="stk">${g.ds.replace(/-/g,'.')}</td>${g.vals.map(v=>`<td>${n2(v)}</td>`).join('')}<td class="tt">${n2(g.vals.reduce((a,b)=>a+b,0))}</td></tr>`).join('')}
     <tr class="ft"><td class="stk">ACTUAL TOTAL</td>${C.tot.map(v=>`<td>${n2(v)}</td>`).join('')}<td class="tt">${n2(C.T)}</td></tr>
@@ -317,11 +326,11 @@ async function vDay(){
   const rows=L.map(l=>({n:l.name,v:cur[l.id]||0,p:pv[l.id]||0})),T=rows.reduce((a,r)=>a+r.v,0),PT=rows.reduce((a,r)=>a+r.p,0),open=rows.filter(r=>r.v).length;
   A._day={rows,T,PT};
   return `<h1>Day report</h1><p class="sub">Sales by location for one day, compared with the day before.</p>
-   <div class="panel"><div class="row" style="align-items:flex-end"><button class="btn ghost" onclick="shiftDay(-1)">‹</button><div style="flex:1;min-width:150px"><label style="margin-top:0">Date</label><input class="inp" type="date" value="${d}" onchange="A.day=this.value;view()"></div><button class="btn ghost" onclick="shiftDay(1)">›</button>
-     <button class="btn green" onclick="exportDay('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportDay('pdf')">⬇ PDF</button></div></div>
-   <div class="kpis"><div class="kpi"><div class="l">Total sales · ${fdate(d)}</div><div class="v" style="color:var(--ok)">${qar(T)}</div><div class="h">vs day before ${pct(T,PT)}</div></div>
+   <div class="panel ctl"><div class="fld"><label>Date</label><div class="dnav"><button class="btn ghost" onclick="shiftDay(-1)">‹</button><input class="inp" type="date" value="${d}" onchange="A.day=this.value;view()"><button class="btn ghost" onclick="shiftDay(1)">›</button></div></div>
+     <div class="acts"><button class="btn green" onclick="exportDay('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportDay('pdf')">⬇ PDF</button></div></div>
+   <div class="kpis"><div class="kpi"><div class="l">Total sales · ${fdate(d)}</div><div class="v" style="color:var(--ok)">${qarK(T)}</div><div class="h">vs day before ${pct(T,PT)}</div></div>
     <div class="kpi"><div class="l">Locations reported</div><div class="v">${open}/${L.length}</div></div>
-    <div class="kpi"><div class="l">Average per location</div><div class="v">${qar(open?T/open:0)}</div></div></div>
+    <div class="kpi"><div class="l">Average per location</div><div class="v">${qarK(open?T/open:0)}</div></div></div>
    <div class="panel"><div class="tscroll"><table class="t"><tr><th>Location</th><th class="n">Sales</th><th class="n">Day before</th><th class="n">Change</th><th class="n">Share</th></tr>
     ${rows.map(r=>`<tr><td>${esc(r.n)}</td><td class="n"><b>${n2(r.v)}</b></td><td class="n">${n2(r.p)}</td><td class="n">${pct(r.v,r.p)}</td><td class="n">${T?(r.v/T*100).toFixed(1)+'%':'-'}</td></tr>`).join('')}
     <tr class="tot"><td>Total</td><td class="n">${n2(T)}</td><td class="n">${n2(PT)}</td><td class="n">${pct(T,PT)}</td><td class="n">100%</td></tr></table></div></div>`}
@@ -339,11 +348,11 @@ async function vMonth(){
   const dayTot=Object.entries(cur).map(([d,v])=>[d,Object.values(v).reduce((a,b)=>a+b,0)]).sort((a,b)=>b[1]-a[1]);
   A._month={rows,T,PT,filled,days};
   return `<h1>Month report</h1><p class="sub">Totals by location, share, average and forecast, compared with the previous month.</p>
-   <div class="panel"><div class="row" style="align-items:flex-end"><div style="flex:1;min-width:160px"><label style="margin-top:0">Month</label><input class="inp" type="month" value="${m}" onchange="A.month=this.value;view()"></div>
-    <button class="btn green" onclick="exportMonth('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportMonth('pdf')">⬇ PDF</button></div></div>
-   <div class="kpis"><div class="kpi"><div class="l">Total · ${monthName(m)}</div><div class="v" style="color:var(--ok)">${qar(T)}</div><div class="h">vs ${monthName(pm)} ${pct(T,PT)}</div></div>
+   <div class="panel ctl"><div class="fld"><label>Month</label><input class="inp" type="month" value="${m}" onchange="A.month=this.value;view()"></div>
+    <div class="acts"><button class="btn green" onclick="exportMonth('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportMonth('pdf')">⬇ PDF</button></div></div>
+   <div class="kpis"><div class="kpi"><div class="l">Total · ${monthName(m)}</div><div class="v" style="color:var(--ok)">${qarK(T)}</div><div class="h">vs ${monthName(pm)} ${pct(T,PT)}</div></div>
     <div class="kpi"><div class="l">Days entered</div><div class="v">${filled}/${days}</div></div>
-    <div class="kpi"><div class="l">Forecast</div><div class="v">${qar(filled?T/filled*days:0)}</div></div>
+    <div class="kpi"><div class="l">Forecast</div><div class="v">${qarK(filled?T/filled*days:0)}</div></div>
     <div class="kpi"><div class="l">Best day</div><div class="v" style="font-size:17px">${dayTot[0]?fdate(dayTot[0][0])+'<br>'+qar(dayTot[0][1]):'—'}</div></div></div>
    <div class="panel"><div class="tscroll"><table class="t"><tr><th>Location</th><th class="n">Total</th><th class="n">Share</th><th class="n">Avg / day</th><th class="n">Forecast</th><th class="n">Prev. month</th><th class="n">Change</th></tr>
     ${rows.map(r=>`<tr><td>${esc(r.n)}</td><td class="n"><b>${n2(r.t)}</b></td><td class="n">${T?(r.t/T*100).toFixed(1)+'%':'-'}</td><td class="n">${n2(filled?r.t/filled:0)}</td><td class="n">${n2(filled?r.t/filled*days:0)}</td><td class="n">${n2(r.p)}</td><td class="n">${pct(r.t,r.p)}</td></tr>`).join('')}
