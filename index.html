@@ -378,11 +378,12 @@ function exportMonth(kind){const {rows,T,PT,filled,days}=A._month,m=A.month,titl
   if(kind==='xlsx')return xlsxOut('Crave_'+KW().one+'_Month_Report_'+m,[['Month report',[[title],[],head,...body]]]);pdfOut('Crave_'+KW().one+'_Month_Report_'+m,'landscape','a4',title,[[null,head,body]])}
 
 /* =================== payment modes =================== */
-const PM_COUNTER=['CASH','CARD','QLUB','BANK TRANSFER','FAWRAN','SADAD'];
+const PM_COUNTER=['CASH','CARD','QLUB','BANK TRANSFER','FAWRAN','SADAD','SUFRA'];
 const PM_APPS=['TALABAT','RAFEEQ','SNOONU','KEETA','BEANZ','DELIVEROO','BAREZ','CARTS'];
 const PM_COLS=[...PM_COUNTER,'COUNTER SALES',...PM_APPS,'DELIVERY APP','CATERING','OTHER','TOTAL'];
 const PM_HL=new Set(['COUNTER SALES','DELIVERY APP','TOTAL']);
 A.payDay='';A.payView='channel';A.payFilter='';
+const PI=k=>PM_COLS.indexOf(k);
 function pmRow(m){const r={};PM_COUNTER.concat(PM_APPS,['CATERING','OTHER']).forEach(k=>r[k]=m[k]||0);
   r['COUNTER SALES']=PM_COUNTER.reduce((a,k)=>a+r[k],0);r['DELIVERY APP']=PM_APPS.reduce((a,k)=>a+r[k],0);
   r.TOTAL=r['COUNTER SALES']+r['DELIVERY APP']+r.CATERING+r.OTHER;return PM_COLS.map(k=>r[k])}
@@ -411,16 +412,16 @@ async function vPay(){
     ${A.payView==='channel'?`<div class="fld"><label>${KW().one}</label><select class="inp" onchange="A.payFilter=this.value;view()"><option value="">All ${KW().many.toLowerCase()}</option>${D.rows.filter(r=>!r.lvl).map(r=>`<option value="${r.id}" ${A.payFilter===r.id?'selected':''}>${esc(r.name)}</option>`).join('')}</select></div>`:''}
     <div class="acts"><button class="btn green" onclick="exportPay('xlsx')">⬇ Excel</button><button class="btn dark" onclick="exportPay('pdf')">⬇ PDF</button></div></div>
    <div class="kpis"><div class="kpi"><div class="l">Total · ${per}</div><div class="v" style="color:var(--ok)">${qarK(D.T)}</div></div>
-    <div class="kpi"><div class="l">Counter sales</div><div class="v">${qarK(D.tot[6])}</div><div class="h">${D.T?(D.tot[6]/D.T*100).toFixed(1):0}%</div></div>
-    <div class="kpi"><div class="l">Delivery apps</div><div class="v">${qarK(D.tot[15])}</div><div class="h">${D.T?(D.tot[15]/D.T*100).toFixed(1):0}%</div></div>
-    <div class="kpi"><div class="l">Catering + other</div><div class="v">${qarK(D.tot[16]+D.tot[17])}</div></div></div>
+    <div class="kpi"><div class="l">Counter sales</div><div class="v">${qarK(D.tot[PI('COUNTER SALES')])}</div><div class="h">${D.T?(D.tot[PI('COUNTER SALES')]/D.T*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="l">Delivery apps</div><div class="v">${qarK(D.tot[PI('DELIVERY APP')])}</div><div class="h">${D.T?(D.tot[PI('DELIVERY APP')]/D.T*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="l">Catering + other</div><div class="v">${qarK(D.tot[PI('CATERING')]+D.tot[PI('OTHER')])}</div></div></div>
    ${D.T||D.daily?(Math.abs(diff)<0.01?`<div class="okbox">✓ Matches the daily sales sheet (${qar(D.daily)})</div>`:`<div class="warnbox" style="margin:0 0 10px">⚠ Daily sales sheet shows ${qar(D.daily)} – difference ${qar(diff)}. Some payment details may be missing.</div>`):''}
    ${A.payView==='channel'?chanHtml(D):`<div class="lstitle">${esc(payTitle())}</div><div class="lswrap"><table class="ls pt"><tr><th class="stk">${KW().one.toUpperCase()}</th>${PM_COLS.map(c=>`<th class="${PM_HL.has(c)?'tt':''}">${c}</th>`).join('')}</tr>
     ${D.rows.map(r=>`<tr class="${r.grp?'grp':''}"><td class="stk" style="text-align:left;${r.lvl?'padding-left:20px;font-weight:500;color:#6b5a3a':''}">${r.lvl?'↳ ':''}${esc(r.name)}</td>${r.vals.map((v,i)=>`<td class="${PM_HL.has(PM_COLS[i])?'tt':''}">${n2(v)}</td>`).join('')}</tr>`).join('')}
     <tr class="ft"><td class="stk">TOTAL</td>${D.tot.map(v=>`<td>${n2(v)}</td>`).join('')}</tr>
     <tr class="ft2"><td class="stk">PERCENTAGE</td>${D.tot.map(v=>`<td>${D.T?(v/D.T*100).toFixed(1):0}%</td>`).join('')}</tr></table></div>`}`}
 function chanData(D){const sel=A.payFilter&&D.rows.find(r=>r.id===A.payFilter&&!r.lvl);const v=sel?sel.vals:D.tot;const T=v[v.length-1];
-  const groups=[['Counter sales',PM_COUNTER,6],['Delivery apps',PM_APPS,15],['Catering',['CATERING'],16],['Other',['OTHER'],17]];
+  const groups=[['Counter sales',PM_COUNTER,PI('COUNTER SALES')],['Delivery apps',PM_APPS,PI('DELIVERY APP')],['Catering',['CATERING'],PI('CATERING')],['Other',['OTHER'],PI('OTHER')]];
   return {name:sel?sel.name:'All '+KW().many.toLowerCase(),T,groups:groups.map(([g,ks,gi])=>({g,amt:v[gi],items:ks.map(k=>({k,amt:v[PM_COLS.indexOf(k)]}))}))}}
 function chanHtml(D){const C=chanData(D),pc=a=>C.T?(a/C.T*100).toFixed(1)+'%':'-',max=Math.max(1,...C.groups.flatMap(g=>g.items.map(i=>i.amt)));
   return `<div class="panel"><h3>Channel sales analysis · ${esc(C.name)}</h3><p class="hint" style="margin-top:-4px">${A.payDay?fdate(D.from):monthName(A.month)}</p>
