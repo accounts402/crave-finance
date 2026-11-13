@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Crave Holding – Finance</title>
 <meta name="theme-color" content="#121214">
@@ -647,6 +648,10 @@ async function vLog(){const R=await DB.audit();
 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&A.me&&A.me.role!=='pending'){A.cache={};if(['sheet','day','month','pay'].includes(A.tab))view()}});
 boot();
+/* auto-update: reload when a newer version is uploaded */
+const BUILD='1794530689';
+async function checkUpdate(){try{const r=await fetch(location.pathname+'?nocache='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/const BUILD='(\d+)'/);if(m&&m[1]!==BUILD){location.replace(location.pathname+'?v='+m[1])}}catch(e){}}
+setTimeout(checkUpdate,1500);setInterval(checkUpdate,300000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate()});
 </script>
 </body>
 </html>
